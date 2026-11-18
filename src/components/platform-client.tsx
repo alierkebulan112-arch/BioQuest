@@ -649,7 +649,7 @@ export function PlatformClient() {
             <div>
               {k === 0 && <Label>Түсіндірме материалдар</Label>}
               <div className={`${k === 0 ? 'mt-3 ' : ''}whitespace-pre-line text-base leading-8 text-slate-700`}>
-                <Rich text={c} />
+                <RichBody text={c} />
               </div>
             </div>
           ),
@@ -658,7 +658,12 @@ export function PlatformClient() {
       if (hasMedia)
         blocks.push({
           label: 'Көрнекілік',
-          node: <LessonMedia lesson={lesson} compact />,
+          node: (
+            <div>
+              <Label>Мұғалімнің түсіндіруі</Label>
+              <LessonMedia lesson={lesson} compact />
+            </div>
+          ),
         })
       blocks.push({
         label: 'Жағдаят',
@@ -717,7 +722,7 @@ export function PlatformClient() {
               <Label>Түсіндірме</Label>
               <h2 className={H}>{lesson.title}</h2>
               <div className="mt-5 whitespace-pre-line text-base leading-8 text-slate-700">
-                <Rich text={lesson.content ?? lesson.summary} />
+                <RichBody text={lesson.content ?? lesson.summary} />
               </div>
               {hasMedia && <LessonMedia lesson={lesson} />}
             </div>
@@ -1324,7 +1329,15 @@ function LessonMedia({ lesson, big = false, compact = false }: { lesson: Lesson;
           ))}
         </div>
       )}
-      {lesson.videoUrl && (
+      {lesson.videoUrl && /\.(mp4|webm|mov)(\?|$)/i.test(lesson.videoUrl) ? (
+        <video
+          src={lesson.videoUrl}
+          controls
+          playsInline
+          preload="metadata"
+          className="aspect-video w-full rounded-2xl border border-emerald-100 bg-black"
+        />
+      ) : lesson.videoUrl ? (
         <div className="aspect-video overflow-hidden rounded-2xl border border-emerald-100">
           <iframe
             src={lesson.videoUrl}
@@ -1334,7 +1347,7 @@ function LessonMedia({ lesson, big = false, compact = false }: { lesson: Lesson;
             allowFullScreen
           />
         </div>
-      )}
+      ) : null}
     </div>
   )
 }
@@ -1343,10 +1356,47 @@ type Block = { label: string; node: React.ReactNode; skipInDeck?: boolean }
 
 function chunkText(content?: string): string[] {
   const paras = (content ?? '').split(/\n\n+/).filter(Boolean)
-  const size = Math.max(1, Math.ceil(paras.length / 3))
+  const total = paras.reduce((n, p) => n + p.length, 0)
   const out: string[] = []
+  if (total > 1800) {
+    // Ұзын түсіндірме — слайдтарға ~550 таңбадан бөлеміз
+    let cur = ''
+    for (const p of paras) {
+      if (cur && cur.length + p.length > 550) {
+        out.push(cur)
+        cur = p
+      } else cur = cur ? `${cur}\n\n${p}` : p
+    }
+    if (cur) out.push(cur)
+    return out
+  }
+  const size = Math.max(1, Math.ceil(paras.length / 3))
   for (let k = 0; k < paras.length; k += size) out.push(paras.slice(k, k + size).join('\n\n'))
   return out
+}
+
+/** Мәтін + «| а | б |» түріндегі кестелер. */
+function RichBody({ text }: { text: string }) {
+  const lines = text.split('\n')
+  const segs: { table: boolean; lines: string[] }[] = []
+  for (const l of lines) {
+    const isRow = l.trim().startsWith('|')
+    const last = segs[segs.length - 1]
+    if (last && last.table === isRow) last.lines.push(l)
+    else segs.push({ table: isRow, lines: [l] })
+  }
+  return (
+    <>
+      {segs.map((sg, i) => {
+        if (!sg.table) return <Rich key={i} text={sg.lines.join('\n')} />
+        const rows = sg.lines
+          .map((l) => l.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim()))
+          .filter((r) => !r.every((c) => /^:?-{2,}:?$/.test(c)))
+        const [head, ...body] = rows
+        return <SimpleTable key={i} table={{ headers: head, rows: body }} />
+      })}
+    </>
+  )
 }
 
 function LessonQuiz({ quiz }: { quiz: NonNullable<Lesson['quiz']> }) {
