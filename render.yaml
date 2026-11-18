@@ -1,0 +1,20 @@
+# Render.com: "New → Blueprint" арқылы осы репозиторийді қосыңыз
+services:
+  - type: web
+    name: bioquest
+    runtime: docker
+    plan: starter        # диск (қолданушылар базасы) үшін ақылы жоспар керек
+    healthCheckPath: /
+    envVars:
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: DATA_DIR
+        value: /data
+      - key: NEXT_PUBLIC_SITE_URL
+        sync: false
+      - key: NEXT_PUBLIC_GOOGLE_CLIENT_ID
+        sync: false
+    disk:
+      name: bioquest-data
+      mountPath: /data
+      sizeGB: 1
