@@ -553,7 +553,7 @@ export function PlatformClient() {
     const tasks = lessonTasks(lesson)
     const media = lessonImages(lesson)
     const hasMedia = media.length > 0 || !!lesson.videoUrl
-    const chunks = chunkText(lesson.content)
+    const chunks = chunkText(lesson.content, lesson.slideSize)
     const totalPoints = tasks.reduce((n, tk) => n + (tk.points ?? 0), 0)
 
     // ——— Оқушы: түсіндірме → 1, 2, 3-тапсырма (әрқайсысы бөлек бет) → тексеру беті ———
@@ -1354,10 +1354,31 @@ function LessonMedia({ lesson, big = false, compact = false }: { lesson: Lesson;
 
 type Block = { label: string; node: React.ReactNode; skipInDeck?: boolean }
 
-function chunkText(content?: string): string[] {
+function chunkText(content?: string, size?: number): string[] {
   const paras = (content ?? '').split(/\n\n+/).filter(Boolean)
   const total = paras.reduce((n, p) => n + p.length, 0)
   const out: string[] = []
+  if (size) {
+    // Түсіндірме беттерге барынша сыяды: ~size таңбаға дейін бір бетке жинаймыз.
+    // Тақырып жолы келесі абзацтан бөлек қалмайды, кесте мен тізім бөлінбейді.
+    const isHeading = (p: string) => /^\*\*[^*\n]+\*\*$/.test(p.trim())
+    const units: string[] = []
+    for (let k = 0; k < paras.length; k++) {
+      if (isHeading(paras[k]) && k + 1 < paras.length) {
+        units.push(`${paras[k]}\n${paras[k + 1]}`)
+        k++
+      } else units.push(paras[k])
+    }
+    let cur = ''
+    for (const u of units) {
+      if (cur && cur.length + u.length > size) {
+        out.push(cur)
+        cur = u
+      } else cur = cur ? `${cur}\n\n${u}` : u
+    }
+    if (cur) out.push(cur)
+    return out
+  }
   if (total > 1800) {
     // Ұзын түсіндірме — слайдтарға ~550 таңбадан бөлеміз
     let cur = ''
@@ -1370,8 +1391,8 @@ function chunkText(content?: string): string[] {
     if (cur) out.push(cur)
     return out
   }
-  const size = Math.max(1, Math.ceil(paras.length / 3))
-  for (let k = 0; k < paras.length; k += size) out.push(paras.slice(k, k + size).join('\n\n'))
+  const step = Math.max(1, Math.ceil(paras.length / 3))
+  for (let k = 0; k < paras.length; k += step) out.push(paras.slice(k, k + step).join('\n\n'))
   return out
 }
 
